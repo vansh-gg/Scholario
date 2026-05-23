@@ -268,5 +268,6 @@ No frontend framework — fully custom CSS and vanilla JS.
 ---
 
 <div align="center">
-<sub>Scholario · SRMIST CSE-A · DBMS Semester 4 Project</sub>
+<sub>Scholario · SRMIST CSE-A · DBMS Semester 4 Project</sub><br>
+<sub>Built by <strong>Vansh Ghai</strong> · SRMIST CSE-A · Batch 2024–28</sub>
 </div>
