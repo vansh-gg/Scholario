@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Attendance — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Mark Attendance</div><div class="topbar-sub">Record student attendance per class</div></div>
+    </div>
+    <div class="page-content fade-in">
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">Class</label>
+            <select class="form-select" id="class-select"></select>
+          </div>
+          <div class="form-group" style="margin:0;flex:1;min-width:140px">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-input" id="date-input" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <button class="btn btn-primary" onclick="loadAttendance()">Load →</button>
+          <a id="csv-link" class="btn btn-secondary" style="display:none" onclick="exportCSV()">Export CSV</a>
+        </div>
+      </div>
+      <div id="att-content"></div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','Attendance');
+let classId=null,currentDate=null,students=[];
+
+async function init(){
+  const d=await apiFetch(`/faculty/${user.user_id}/dashboard`);
+  const sel=document.getElementById('class-select');
+  d.classes.forEach(c=>{const o=document.createElement('option');o.value=c.class_id;o.textContent=c.subject;sel.appendChild(o);});
+  if(d.classes.length)loadAttendance();
+}
+
+async function loadAttendance(){
+  classId=document.getElementById('class-select').value;
+  currentDate=document.getElementById('date-input').value;
+  if(!classId||!currentDate){showToast('Select class and date','error');return;}
+  try{
+    students=await apiFetch(`/faculty/${user.user_id}/attendance/${classId}/${currentDate}`);
+    renderAtt();
+    document.getElementById('csv-link').style.display='inline-flex';
+  }catch(e){document.getElementById('att-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function renderAtt(){
+  const present=students.filter(s=>s.status==='present').length;
+  const absent=students.filter(s=>s.status==='absent').length;
+  document.getElementById('att-content').innerHTML=`
+    <div class="stats-grid" style="margin-bottom:14px">
+      <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-value">${present}</div><div class="stat-label">Present</div></div>
+      <div class="stat-card red"><span class="stat-icon">❌</span><div class="stat-value">${absent}</div><div class="stat-label">Absent</div></div>
+      <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-value">${students.length}</div><div class="stat-label">Total</div></div>
+      <div class="stat-card blue"><span class="stat-icon">📊</span><div class="stat-value">${students.length?Math.round(present/students.length*100):0}%</div><div class="stat-label">Rate</div></div>
+    </div>
+    <div class="card">
+      <div class="section-title">
+        Student List — ${new Date(currentDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="markAll('present')">All Present</button>
+          <button class="btn btn-secondary btn-sm" onclick="markAll('absent')">All Absent</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>Reg Number</th><th>Name</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="att-tbody">
+          ${students.map((s,i)=>`<tr id="row-${s.student_id}">
+            <td style="color:var(--text3)">${i+1}</td>
+            <td style="font-size:11px;color:var(--text2)">${s.reg_number}</td>
+            <td style="font-weight:600;color:var(--text)">${s.name}</td>
+            <td id="status-${s.student_id}">${statusBadge(s.status==='not_marked'?'not_marked':s.status)}</td>
+            <td>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-sm ${s.status==='present'?'btn-primary':'btn-secondary'}" onclick="mark(${s.student_id},'present')" id="btn-p-${s.student_id}">P</button>
+                <button class="btn btn-sm ${s.status==='absent'?'btn-danger':'btn-secondary'}" onclick="mark(${s.student_id},'absent')" id="btn-a-${s.student_id}">A</button>
+                <button class="btn btn-sm ${s.status==='late'?'btn-sm':'btn-secondary'}" onclick="mark(${s.student_id},'late')" id="btn-l-${s.student_id}" style="${s.status==='late'?'background:var(--yellow-bg);color:var(--yellow);border-color:#fde68a':''}">L</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+async function mark(studentId,status){
+  try{
+    await apiFetch('/faculty/attendance',{method:'POST',body:JSON.stringify({student_id:studentId,class_id:parseInt(classId),date:currentDate,status,marked_by:user.user_id})});
+    const s=students.find(s=>s.student_id===studentId);
+    if(s)s.status=status;
+    // Update UI
+    document.getElementById(`status-${studentId}`).innerHTML=statusBadge(status);
+    ['present','absent','late'].forEach(st=>{
+      const btn=document.getElementById(`btn-${st[0]}-${studentId}`);
+      if(btn){
+        const isActive=st===status;
+        btn.className=`btn btn-sm ${isActive?(st==='absent'?'btn-danger':'btn-primary'):'btn-secondary'}`;
+        if(isActive&&st==='late')btn.style.cssText='background:var(--yellow-bg);color:var(--yellow);border-color:#fde68a';
+        else btn.style.cssText='';
+      }
+    });
+  }catch(e){showToast(e.message,'error');}
+}
+
+async function markAll(status){
+  for(const s of students){await mark(s.student_id,status);}
+  showToast(`All students marked as ${status}`);
+}
+
+function exportCSV(){window.open(`${API}/export/attendance/${classId}`);}
+
+init().catch(e=>console.error(e));
+</script>
+</body>
+</html>

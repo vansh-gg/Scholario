@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Admin Dashboard — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Admin Dashboard</div><div class="topbar-sub">Department-wide overview</div></div>
+      <div class="topbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="refreshRisk()">↻ Refresh At-Risk</button>
+        <a href="http://localhost:8000/api/export/students" class="btn btn-secondary btn-sm">Export CSV</a>
+      </div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('admin','Dashboard');
+
+async function load(){
+  try{const d=await apiFetch('/admin/dashboard');render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">Backend error: ${e.message}</div>`;}
+}
+
+async function refreshRisk(){
+  showToast('Recalculating at-risk flags...','info');
+  const r=await apiFetch('/admin/refresh-at-risk');
+  showToast(`Done — ${r.flagged} students flagged`);
+  load();
+}
+
+function render(d){
+  const t=d.totals;
+  document.getElementById('main-content').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card blue">
+        <span class="stat-icon">🎓</span>
+        <div class="stat-value">${t.students}</div>
+        <div class="stat-label">Students</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">👩‍🏫</span>
+        <div class="stat-value">${t.faculty}</div>
+        <div class="stat-label">Faculty</div>
+      </div>
+      <div class="stat-card ${parseFloat(t.att_overall)>=85?'green':parseFloat(t.att_overall)>=75?'yellow':'red'}">
+        <span class="stat-icon">📅</span>
+        <div class="stat-value">${t.att_overall}%</div>
+        <div class="stat-label">Avg Attendance</div>
+        <div class="progress-bar mt-4"><div class="progress-fill" style="width:${t.att_overall}%;background:${attColor(t.att_overall)}"></div></div>
+      </div>
+      <div class="stat-card ${t.at_risk>0?'red':'green'}">
+        <span class="stat-icon">⚠️</span>
+        <div class="stat-value">${t.at_risk}</div>
+        <div class="stat-label">At-Risk</div>
+        <div class="stat-sub">Below 75% threshold</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">📋</span>
+        <div class="stat-value">${t.assignments}</div>
+        <div class="stat-label">Assignments</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">📬</span>
+        <div class="stat-value">${t.submissions}</div>
+        <div class="stat-label">Submissions</div>
+      </div>
+      <div class="stat-card ${t.plagiarism>0?'red':''}">
+        <span class="stat-icon">🔍</span>
+        <div class="stat-value">${t.plagiarism}</div>
+        <div class="stat-label">Plagiarism Flags</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-title">📚 Class Health</div>
+        ${d.class_stats.map(c=>`
+          <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <span style="font-weight:600;font-size:13px">${c.subject}</span>
+              <span style="font-family:var(--font-display);font-weight:700;font-size:13px;color:${attColor(c.att_pct??0)}">${c.att_pct??0}%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${c.att_pct??0}%;background:${attColor(c.att_pct??0)}"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">${c.student_count} students · ${c.assignment_count} assignments</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="card">
+        <div class="card-title">👩‍🏫 Faculty Workload</div>
+        ${d.faculty_workload.map(f=>`
+          <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-weight:600;font-size:13px">${f.name}</span>
+              <span class="badge ${f.pending_grading>5?'badge-red':f.pending_grading>0?'badge-yellow':'badge-green'}">${f.pending_grading} to grade</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3)">${f.classes} class${f.classes!==1?'es':''} · ${f.total_assignments} assignments</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🔗 Quick Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="admin-students.html" class="btn btn-secondary">👥 View All Students</a>
+        <a href="admin-atrisk.html" class="btn btn-secondary">⚠️ At-Risk Report</a>
+        <a href="admin-plagiarism.html" class="btn btn-secondary">🔍 Plagiarism Report</a>
+        <a href="admin-audit.html" class="btn btn-secondary">📋 Audit Log</a>
+        <a href="http://localhost:8000/api/export/students" class="btn btn-secondary">⬇ Export Students CSV</a>
+      </div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

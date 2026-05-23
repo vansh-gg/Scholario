@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Students — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">All Students</div><div class="topbar-sub">Full student roster with attendance and submissions</div></div>
+      <div class="topbar-right">
+        <div class="filter-tabs" style="margin:0">
+          <button class="filter-tab active" onclick="filterSection('all',this)">All</button>
+          <button class="filter-tab" onclick="filterSection('AL2',this)">AL2</button>
+          <button class="filter-tab" onclick="filterSection('SAO',this)">SAO</button>
+        </div>
+        <input type="text" id="search" class="form-input" style="width:180px;margin:0" placeholder="Search name or reg..." oninput="filterStudents()">
+        <a href="http://localhost:8000/api/export/students" class="btn btn-secondary btn-sm">Export CSV</a>
+      </div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('admin','Students');
+let all=[], currentSection='all';
+
+async function load(){
+  try{all=await apiFetch('/admin/students');applyFilters();}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function filterSection(sec, el){
+  currentSection=sec;
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+}
+
+function filterStudents(){applyFilters();}
+
+function applyFilters(){
+  const q=(document.getElementById('search')?.value||'').toLowerCase();
+  let list=all;
+  if(currentSection!=='all') list=list.filter(s=>(s.section||'AL2')===currentSection);
+  if(q) list=list.filter(s=>s.name.toLowerCase().includes(q)||s.reg_number.toLowerCase().includes(q));
+  render(list);
+}
+
+function render(list){
+  document.getElementById('main-content').innerHTML=`
+    <div class="card">
+      <div class="section-title">👥 Students (${list.length})</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Reg Number</th><th>Name</th><th>Section</th><th>Subject</th><th>Attendance</th><th>Submissions</th><th>Last Active</th><th>Status</th></tr></thead>
+        <tbody>
+          ${list.map(s=>`<tr>
+            <td style="font-size:11px;color:var(--text2);font-weight:600">${s.reg_number}</td>
+            <td style="font-weight:600;color:var(--text)">${s.name}</td>
+            <td><span class="badge ${s.section==='SAO'?'badge-blue':'badge-gray'}">${s.section||'AL2'}</span></td>
+            <td style="font-size:12px;color:var(--text2)">${s.subject}</td>
+            <td>
+              <span style="font-family:var(--font-display);font-weight:700;color:${attColor(s.att_pct??0)};font-size:13px">${s.att_pct??0}%</span>
+            </td>
+            <td style="color:var(--text2)">${s.submissions}</td>
+            <td style="font-size:11px;color:var(--text3)">${timeAgo(s.last_active)}</td>
+            <td>${s.risk_reason?`<span class="risk-tag">⚠ At Risk</span>`:`<span class="badge badge-green">✓ OK</span>`}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Faculty Dashboard — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="greeting">Faculty Dashboard</div>
+        <div class="topbar-sub" id="topbar-date"></div>
+      </div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','Dashboard');
+const h=new Date().getHours();
+document.getElementById('greeting').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${user.name.split(' ')[0]}!`;
+document.getElementById('topbar-date').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+async function load(){
+  try{const d=await apiFetch(`/faculty/${user.user_id}/dashboard`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">Backend error: ${e.message}</div>`;}
+}
+
+function render(d){
+  const s=d.stats;
+  document.getElementById('main-content').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card blue">
+        <span class="stat-icon">👥</span>
+        <div class="stat-value">${s.total_students}</div>
+        <div class="stat-label">Students</div>
+        <div class="stat-sub">Across your classes</div>
+      </div>
+      <div class="stat-card ${s.pending_grading>0?'yellow':'green'}">
+        <span class="stat-icon">📬</span>
+        <div class="stat-value">${s.pending_grading}</div>
+        <div class="stat-label">To Grade</div>
+        <div class="stat-sub">Submissions awaiting review</div>
+      </div>
+      <div class="stat-card ${s.at_risk_students>0?'red':'green'}">
+        <span class="stat-icon">⚠️</span>
+        <div class="stat-value">${s.at_risk_students}</div>
+        <div class="stat-label">At Risk</div>
+        <div class="stat-sub">Below 75% attendance</div>
+      </div>
+      <div class="stat-card ${s.plagiarism_flags>0?'red':''}">
+        <span class="stat-icon">🔍</span>
+        <div class="stat-value">${s.plagiarism_flags}</div>
+        <div class="stat-label">Plagiarism Flags</div>
+        <div class="stat-sub">Flagged submissions</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-title">📚 Your Classes</div>
+        ${d.classes.map(c=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-weight:600;font-size:13px">${c.subject}</div>
+              <div style="font-size:11px;color:var(--text3)">Sem ${c.semester} · ${c.class_name}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <a href="faculty-attendance.html?class=${c.class_id}" class="btn btn-secondary btn-sm">Attendance</a>
+              <a href="faculty-assignments.html" class="btn btn-secondary btn-sm">Assignments</a>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="card">
+        <div class="card-title">📊 Workload Score</div>
+        <div style="text-align:center;padding:16px 0">
+          <div style="font-family:var(--font-display);font-size:48px;font-weight:800;letter-spacing:-2px;color:var(--text)">${s.workload_score}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">points (assignments × 10 + pending × 5)</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <a href="faculty-submissions.html" class="btn btn-primary btn-sm">Grade submissions →</a>
+          <a href="faculty-atrisk.html" class="btn btn-secondary btn-sm">View at-risk →</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📬 Recent Submissions
+        <a href="faculty-submissions.html" class="btn btn-secondary btn-sm">View all →</a>
+      </div>
+      ${!d.recent_submissions.length?`<div class="empty-state"><div class="empty-icon">📭</div><h3>No submissions yet</h3></div>`:`
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Student</th><th>Assignment</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>
+              ${d.recent_submissions.slice(0,8).map(s=>`<tr>
+                <td style="font-weight:600;color:var(--text)">${s.student_name}</td>
+                <td style="color:var(--text2)">${s.assignment_title}</td>
+                <td style="color:var(--text3)">${timeAgo(s.submitted_at)}</td>
+                <td>${statusBadge(s.status)}${s.plagiarism_flag?` ${plagBadge(true)}`:''}${s.is_late?' '+lateBadge(true):''}</td>
+                <td><a href="faculty-submissions.html" class="btn btn-secondary btn-sm">Grade</a></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

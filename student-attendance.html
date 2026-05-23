@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Attendance — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Attendance</div><div class="topbar-sub">Your records across all subjects</div></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('student','Attendance');
+
+async function load(){
+  try{const d=await apiFetch(`/student/${user.user_id}/attendance`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">Backend error: ${e.message}</div>`;}
+}
+
+function render({records,stats}){
+  const byDate={};
+  records.forEach(r=>{const d=(r.date?.split('T')[0])||String(r.date);if(!byDate[d])byDate[d]={};byDate[d][r.subject]=r.status;});
+  const dates=Object.keys(byDate).sort().slice(-30);
+
+  document.getElementById('main-content').innerHTML=`
+    <div class="stats-grid" style="margin-bottom:14px">
+      ${stats.map(s=>`
+        <div class="stat-card ${s.percentage>=85?'green':s.percentage>=75?'yellow':'red'}">
+          <span class="stat-icon">📚</span>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${s.subject}</div>
+          <div class="stat-value">${s.percentage??0}%</div>
+          <div class="progress-bar mt-4"><div class="progress-fill" style="width:${s.percentage??0}%;background:${attColor(s.percentage??0)}"></div></div>
+          <div class="stat-sub">${s.present} / ${s.total} classes attended</div>
+          ${(s.percentage??0)<75?`<div class="risk-tag" style="margin-top:8px">⚠ Below threshold</div>`:''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="section-title">📅 Last 30 Days — Heatmap</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:11px;color:var(--text3)">
+        <span class="att-cell att-present">P</span> Present &nbsp;
+        <span class="att-cell att-absent">A</span> Absent &nbsp;
+        <span class="att-cell att-late">L</span> Late
+      </div>
+      <div class="att-grid">
+        ${dates.map(d=>{
+          const statuses=Object.values(byDate[d]);
+          const absent=statuses.some(s=>s==='absent');
+          const late=statuses.some(s=>s==='late');
+          const cls=absent?'att-absent':late?'att-late':'att-present';
+          const label=absent?'A':late?'L':'P';
+          const dl=new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
+          return `<div class="att-cell ${cls}" title="${dl}: ${absent?'Absent':late?'Late':'Present'}">${label}</div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📋 Detailed Records</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Subject</th><th>Status</th></tr></thead>
+          <tbody>
+            ${records.slice(0,60).map(r=>`<tr>
+              <td style="font-weight:500;color:var(--text)">${formatDate(r.date)}</td>
+              <td>${r.subject}</td>
+              <td>${statusBadge(r.status)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

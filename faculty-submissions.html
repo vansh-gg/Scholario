@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Submissions — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Submissions</div><div class="topbar-sub">Grade and review student submissions</div></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Grade Modal -->
+<div class="modal-overlay" id="grade-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">Grade Submission</div>
+      <button class="modal-close" onclick="closeModal('grade-modal')">✕</button>
+    </div>
+    <div id="grade-info" style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2)"></div>
+    <div id="submission-text" style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px;font-size:13px;color:var(--text2);max-height:120px;overflow-y:auto;line-height:1.6"></div>
+    <div class="form-group">
+      <label class="form-label">Marks (out of <span id="max-marks-label">10</span>)</label>
+      <input type="number" class="form-input" id="marks-input" min="0" placeholder="Enter marks">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Remark (optional)</label>
+      <textarea class="form-textarea" id="remark-input" placeholder="Feedback for student..." style="min-height:70px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal('grade-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doGrade()">Save Grade →</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','Submissions');
+let selected=null;
+
+async function load(){
+  try{const d=await apiFetch(`/faculty/${user.user_id}/submissions`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function render(list){
+  const pending=list.filter(s=>s.status==='submitted');
+  const graded=list.filter(s=>s.status==='checked');
+  document.getElementById('main-content').innerHTML=`
+    ${pending.length?`
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title">📬 Pending Grade (${pending.length})</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Student</th><th>Assignment</th><th>Submitted</th><th>Flags</th><th>Action</th></tr></thead>
+          <tbody>${pending.map(s=>`<tr>
+            <td><div style="font-weight:600;color:var(--text)">${s.student_name}</div><div style="font-size:11px;color:var(--text3)">${s.reg_number}</div></td>
+            <td><div style="font-weight:500">${s.assignment_title}</div><div style="font-size:11px;color:var(--text3)">${s.subject} · max ${s.max_marks}</div></td>
+            <td style="color:var(--text3)">${timeAgo(s.submitted_at)}<br><span style="font-size:10px">${formatDate(s.submitted_at)}</span></td>
+            <td>${s.plagiarism_flag?plagBadge(true):'—'}${s.is_late?' '+lateBadge(true):''}</td>
+            <td><button class="btn btn-primary btn-sm" onclick='openGrade(${JSON.stringify(s).replace(/'/g,"&#39;")})'>Grade →</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+    `:''}
+
+    <div class="card">
+      <div class="section-title">✅ Graded (${graded.length})</div>
+      ${!graded.length?`<div class="empty-state"><div class="empty-icon">📭</div><h3>Nothing graded yet</h3></div>`:`
+        <div class="table-wrap"><table>
+          <thead><tr><th>Student</th><th>Assignment</th><th>Score</th><th>Remark</th></tr></thead>
+          <tbody>${graded.map(s=>`<tr>
+            <td><div style="font-weight:600;color:var(--text)">${s.student_name}</div><div style="font-size:11px;color:var(--text3)">${s.reg_number}</div></td>
+            <td style="color:var(--text2)">${s.assignment_title}</td>
+            <td><span style="font-family:var(--font-display);font-weight:700;font-size:15px">${s.effective_marks??s.marks_obtained}</span><span style="color:var(--text3);font-size:11px">/${s.max_marks}</span>${s.is_late?` <span style="font-size:10px;color:var(--yellow)">(late)</span>`:''}</td>
+            <td style="font-size:12px;color:var(--text2);max-width:200px">${s.remark_text||'—'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      `}
+    </div>
+  `;
+}
+
+function openGrade(s){
+  selected=s;
+  document.getElementById('grade-info').innerHTML=`<strong>${s.student_name}</strong> (${s.reg_number}) · <strong>${s.assignment_title}</strong> · ${formatDate(s.submitted_at)}`;
+  document.getElementById('submission-text').textContent=s.submission_text||'(No text content)';
+  document.getElementById('max-marks-label').textContent=s.max_marks;
+  document.getElementById('marks-input').max=s.max_marks;
+  document.getElementById('marks-input').value='';
+  document.getElementById('remark-input').value='';
+  openModal('grade-modal');
+}
+
+async function doGrade(){
+  const marks=parseInt(document.getElementById('marks-input').value);
+  const remark=document.getElementById('remark-input').value.trim();
+  if(isNaN(marks)||marks<0||marks>selected.max_marks){showToast(`Marks must be 0–${selected.max_marks}`,'error');return;}
+  try{
+    await apiFetch(`/faculty/grade/${selected.submission_id}`,{method:'PUT',body:JSON.stringify({marks_obtained:marks,remark_text:remark,faculty_id:user.user_id})});
+    closeModal('grade-modal');
+    showToast('Submission graded! Student notified.');
+    load();
+  }catch(e){showToast(e.message,'error');}
+}
+load();
+</script>
+</body>
+</html>

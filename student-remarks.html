@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Remarks — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Remarks</div><div class="topbar-sub">Faculty feedback on your submissions</div></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('student','Remarks');
+
+async function load(){
+  try{const d=await apiFetch(`/student/${user.user_id}/remarks`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function render(list){
+  if(!list.length){
+    document.getElementById('main-content').innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">💬</div><h3>No remarks yet</h3><p style="font-size:12px;color:var(--text3)">Remarks will appear once your work is graded.</p></div></div>`;
+    return;
+  }
+  document.getElementById('main-content').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${list.map(r=>`
+        <div class="card" style="border-left:3px solid var(--accent)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
+            <div>
+              <div style="font-family:var(--font-display);font-size:14px;font-weight:700">${r.assignment_title}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">by ${r.faculty_name} · ${timeAgo(r.created_at)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-family:var(--font-display);font-size:20px;font-weight:800">${r.effective_marks??r.marks_obtained??'—'}</div>
+              <div style="font-size:10px;color:var(--text3)">marks</div>
+            </div>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text2);line-height:1.6">
+            💬 ${r.remark_text}
+          </div>
+          ${r.plagiarism_flag?`<div style="margin-top:8px">${plagBadge(true)}</div>`:''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

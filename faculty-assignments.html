@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Assignments — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Assignments</div><div class="topbar-sub">Create and manage assignments</div></div>
+      <div class="topbar-right"><button class="btn btn-primary btn-sm" onclick="openModal('create-modal')">+ New Assignment</button></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="create-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Create Assignment</div>
+      <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input type="text" class="form-input" id="a-title" placeholder="Assignment title">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" id="a-desc" placeholder="Instructions..."></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">Difficulty</label>
+        <select class="form-select" id="a-diff"><option>Easy</option><option selected>Medium</option><option>Hard</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max Marks</label>
+        <input type="number" class="form-input" id="a-marks" value="10" min="1">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Due Date</label>
+      <input type="datetime-local" class="form-input" id="a-due">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal('create-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createAssignment()">Create →</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','Assignments');
+let classes=[];
+
+async function load(){
+  try{
+    const d=await apiFetch(`/faculty/${user.user_id}/dashboard`);
+    classes=d.classes;
+    render(d);
+  }catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function render(d){
+  document.getElementById('main-content').innerHTML=`
+    <div class="card">
+      <div class="section-title">📝 All Assignments</div>
+      ${!d.recent_submissions.length&&!d.classes.length?`<div class="empty-state"><div class="empty-icon">📝</div><h3>No assignments yet</h3></div>`:''}
+      ${d.classes.map(c=>`
+        <div style="margin-bottom:16px">
+          <div style="font-family:var(--font-display);font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${c.subject}</div>
+        </div>
+      `).join('')}
+      <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
+        Click "+ New Assignment" above to create one. Submissions are tracked automatically.
+      </div>
+    </div>
+  `;
+}
+
+async function createAssignment(){
+  const title=document.getElementById('a-title').value.trim();
+  const desc=document.getElementById('a-desc').value.trim();
+  const diff=document.getElementById('a-diff').value;
+  const marks=parseInt(document.getElementById('a-marks').value);
+  const due=document.getElementById('a-due').value;
+  if(!title||!due){showToast('Title and due date required','error');return;}
+  if(!classes.length){showToast('No classes found for your account','error');return;}
+  try{
+    await apiFetch('/faculty/assignment',{method:'POST',body:JSON.stringify({class_id:classes[0].class_id,faculty_id:user.user_id,title,description:desc,difficulty:diff,due_date:due.replace('T',' ')+':00',max_marks:marks})});
+    closeModal('create-modal');
+    showToast('Assignment created! Students notified.');
+    load();
+  }catch(e){showToast(e.message,'error');}
+}
+load();
+</script>
+</body>
+</html>

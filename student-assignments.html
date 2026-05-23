@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Assignments — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Assignments</div><div class="topbar-sub">Track, submit and view your graded work</div></div>
+    </div>
+    <div class="page-content fade-in">
+      <div class="filter-tabs" id="filter-tabs">
+        <button class="filter-tab active" onclick="filterTab('all',this)">All</button>
+        <button class="filter-tab" onclick="filterTab('pending',this)">Pending</button>
+        <button class="filter-tab" onclick="filterTab('submitted',this)">Submitted</button>
+        <button class="filter-tab" onclick="filterTab('checked',this)">Graded</button>
+      </div>
+      <div id="list"><div class="loading"><div class="spinner"></div> Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="submit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Submit Assignment</div>
+      <button class="modal-close" onclick="closeModal('submit-modal')">✕</button>
+    </div>
+    <div id="modal-info" style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2)"></div>
+    <div class="form-group">
+      <label class="form-label">Your Answer / Notes</label>
+      <textarea class="form-textarea" id="submit-text" placeholder="Write your answer here..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal('submit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doSubmit()">Submit →</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('student','Assignments');
+let all=[],selectedA=null,studentId=null;
+
+async function load(){
+  try{
+    const info=await apiFetch(`/student/${user.user_id}/dashboard`);
+    studentId=info.student.student_id;
+    all=await apiFetch(`/student/${user.user_id}/assignments`);
+    render(all);
+  }catch(e){
+    document.getElementById('list').innerHTML=`<div class="alert alert-danger">Backend error: ${e.message}</div>`;
+  }
+}
+
+function filterTab(type,el){
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const f=type==='all'?all:type==='pending'?all.filter(a=>!a.submission_id):type==='submitted'?all.filter(a=>a.sub_status==='submitted'):all.filter(a=>a.sub_status==='checked');
+  render(f);
+}
+
+function render(list){
+  if(!list.length){document.getElementById('list').innerHTML=`<div class="empty-state"><div class="empty-icon">📋</div><h3>Nothing here</h3></div>`;return;}
+  document.getElementById('list').innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${list.map(card).join('')}</div>`;
+}
+
+function card(a){
+  const submitted=!!a.submission_id;
+  const overdue=new Date()>new Date(a.due_date);
+  let action='';
+  if(!submitted&&!overdue)action=`<button class="btn btn-primary btn-sm" onclick='openSubmit(${JSON.stringify(a).replace(/'/g,"&#39;")})'>Submit →</button>`;
+  else if(!submitted&&overdue)action=`<span class="badge badge-red">Missed</span>`;
+  else if(a.sub_status==='checked')action=`<div style="text-align:right"><div style="font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--text)">${a.effective_marks??a.marks_obtained}/${a.max_marks}</div><div style="font-size:10px;color:var(--text3)">${a.penalty_pct>0?`-${a.penalty_pct}% late penalty`:'marks earned'}</div></div>`;
+  else action=`<span class="badge badge-blue">⏳ Awaiting grade</span>`;
+
+  return `<div class="card" style="border-left:3px solid ${submitted?'var(--green)':overdue?'var(--red)':'var(--accent)'}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+          <span style="font-family:var(--font-display);font-size:14px;font-weight:700">${a.title}</span>
+          ${diffBadge(a.difficulty)}${lateBadge(a.is_late)}${plagBadge(a.plagiarism_flag)}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:7px">${a.description||''}</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3)">
+          <span>👨‍🏫 ${a.faculty_name}</span>
+          <span>📌 Max ${a.max_marks} marks</span>
+          <span>📅 Due ${formatDate(a.due_date)}</span>
+          ${!submitted?countdownHTML(a.due_date):(a.submitted_at?`<span>✓ Submitted ${timeAgo(a.submitted_at)}</span>`:'')}
+        </div>
+        ${a.sub_status==='checked'&&a.remark_text?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text2);border-left:2px solid var(--border2)">💬 ${a.remark_text}</div>`:''}
+      </div>
+      <div style="flex-shrink:0">${action}</div>
+    </div>
+  </div>`;
+}
+
+function openSubmit(a){
+  selectedA=a;
+  document.getElementById('modal-title').textContent=`Submit: ${a.title}`;
+  document.getElementById('modal-info').innerHTML=`<strong>${a.title}</strong> &nbsp;·&nbsp; Due: ${formatDate(a.due_date)} &nbsp;·&nbsp; ${a.max_marks} marks &nbsp;·&nbsp; ${diffBadge(a.difficulty)}`;
+  document.getElementById('submit-text').value='';
+  openModal('submit-modal');
+}
+
+async function doSubmit(){
+  const text=document.getElementById('submit-text').value.trim();
+  if(!text){showToast('Please write your answer first','error');return;}
+  try{
+    const r=await apiFetch('/student/submit',{method:'POST',body:JSON.stringify({assignment_id:selectedA.assignment_id,student_id:studentId,submission_text:text})});
+    closeModal('submit-modal');
+    if(r.plagiarism_flag)showToast('⚠ Submitted — similarity detected with another submission!','error');
+    else if(r.is_late)showToast('Submitted late — penalty may apply','info');
+    else showToast('Assignment submitted!');
+    load();
+  }catch(e){showToast(e.message,'error');}
+}
+load();
+</script>
+</body>
+</html>

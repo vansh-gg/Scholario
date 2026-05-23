@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dashboard — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="greeting">Dashboard</div>
+        <div class="topbar-sub" id="topbar-date"></div>
+      </div>
+      <div class="topbar-right">
+        <button class="notif-btn" onclick="location.href='student-notifications.html'" title="Notifications">
+          🔔<span class="notif-dot" id="notif-dot" style="display:none"></span>
+        </button>
+      </div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading dashboard...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('student','Dashboard');
+const h=new Date().getHours();
+document.getElementById('greeting').textContent=`${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${user.name.split(' ')[0]}!`;
+document.getElementById('topbar-date').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+async function load(){
+  try{
+    const d=await apiFetch(`/student/${user.user_id}/dashboard`);
+    render(d);
+  }catch(e){
+    document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">⚠ Could not connect to backend. Make sure FastAPI is running on port 8000.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function render(d){
+  const att=d.attendance,asgn=d.assignments;
+  const attPct=att.percentage??0;
+  const riskBanner=attPct<75
+    ?`<div class="alert alert-danger">⚠️ <strong>Attendance Alert:</strong> Your attendance is ${attPct}%, below the 75% threshold. Risk of being barred from exams.</div>`
+    :attPct<85?`<div class="alert alert-warning">⚠️ Attendance at ${attPct}% — maintain 85%+ to stay safe.</div>`:'';
+
+  document.getElementById('main-content').innerHTML=`
+    ${riskBanner}
+    <div class="stats-grid">
+      <div class="stat-card ${attPct>=85?'green':attPct>=75?'yellow':'red'}">
+        <span class="stat-icon">📅</span>
+        <div class="stat-value">${attPct}%</div>
+        <div class="stat-label">Attendance</div>
+        <div class="progress-bar mt-4"><div class="progress-fill" style="width:${attPct}%;background:${attColor(attPct)}"></div></div>
+        <div class="stat-sub">${att.present} present · ${att.absent} absent</div>
+      </div>
+      <div class="stat-card blue">
+        <span class="stat-icon">📋</span>
+        <div class="stat-value">${asgn.submitted}<span style="font-size:14px;color:var(--text3)">/${asgn.total}</span></div>
+        <div class="stat-label">Submitted</div>
+        <div class="progress-bar mt-4"><div class="progress-fill" style="width:${asgn.rate}%;background:var(--accent)"></div></div>
+        <div class="stat-sub">${asgn.rate}% submission rate</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">⭐</span>
+        <div class="stat-value">${d.avg_score||0}<span style="font-size:14px;color:var(--text3)">/10</span></div>
+        <div class="stat-label">Avg Score</div>
+        <div class="stat-sub">Based on graded work</div>
+      </div>
+      <div class="stat-card ${d.streak>=5?'green':''}">
+        <span class="stat-icon">🔥</span>
+        <div class="stat-value">${d.streak}</div>
+        <div class="stat-label">Day Streak</div>
+        <div class="stat-sub">Consecutive days present</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-title">🧠 Predicted Grade</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+          ${gradeBadgeHTML(d.predicted_grade)}
+          <div>
+            <div style="font-family:var(--font-display);font-size:24px;font-weight:800;letter-spacing:-1px">${d.predicted_grade}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">Based on attendance + submissions + scores</div>
+          </div>
+        </div>
+        ${gradeRow('Attendance',attPct,'%')}
+        ${gradeRow('Submission Rate',asgn.rate,'%')}
+        ${gradeRow('Avg Score',d.avg_score*10,'')}
+        <div style="margin-top:10px;font-size:10px;color:var(--text3);padding-top:10px;border-top:1px solid var(--border)">
+          O ≥ 90% all · A+ ≥ 85% · A ≥ 80% · B+ ≥ 75% · B ≥ 70% · F below threshold
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⏳ Upcoming Assignments</div>
+        ${d.upcoming_assignments.length===0
+          ?`<div class="empty-state"><div class="empty-icon">🎉</div><h3>All clear!</h3><p style="font-size:12px;color:var(--text3)">No pending assignments.</p></div>`
+          :d.upcoming_assignments.map(a=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${diffBadge(a.difficulty)} ${a.my_status==='submitted'?'<span class="badge badge-green">✓ Submitted</span>':''}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-left:8px">
+                ${countdownHTML(a.due_date)}
+                <div style="font-size:10px;color:var(--text3);margin-top:2px">${formatDate(a.due_date)}</div>
+              </div>
+            </div>
+          `).join('')
+        }
+        <div style="margin-top:12px"><a href="student-assignments.html" class="btn btn-secondary btn-sm">View all assignments →</a></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🔔 Recent Notifications <a href="student-notifications.html" class="btn btn-secondary btn-sm">View all</a></div>
+      ${d.notifications.length===0
+        ?`<div style="font-size:13px;color:var(--text3);padding:12px 0">No notifications yet.</div>`
+        :d.notifications.slice(0,4).map(n=>`
+          <div class="notif-item ${!n.is_read?'unread':''}">
+            <div class="notif-dot-type" style="background:${notifColor(n.type)}"></div>
+            <div style="flex:1">
+              <div class="notif-title">${n.title}</div>
+              <div class="notif-msg">${n.message||''}</div>
+              <div class="notif-time">${timeAgo(n.created_at)}</div>
+            </div>
+            ${statusBadge(n.type)}
+          </div>
+        `).join('')
+      }
+    </div>
+  `;
+}
+
+function gradeRow(label,val,suffix){
+  const pct=Math.min(100,val);
+  const color=val>=85?'var(--green)':val>=70?'var(--yellow)':'var(--red)';
+  return `<div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
+      <span>${label}</span><span style="color:${color};font-weight:600">${val}${suffix}</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+  </div>`;
+}
+
+function notifColor(t){return{info:'var(--accent)',warning:'var(--yellow)',success:'var(--green)',urgent:'var(--red)'}[t]||'var(--text3)';}
+
+load();
+</script>
+</body>
+</html>

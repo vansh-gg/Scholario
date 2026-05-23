@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>At-Risk Students — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">At-Risk Students</div><div class="topbar-sub">Students below attendance or submission thresholds</div></div>
+      <div class="topbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="refresh()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','At-Risk');
+
+async function load(){
+  try{const d=await apiFetch(`/faculty/${user.user_id}/at-risk`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+async function refresh(){
+  showToast('Refreshing at-risk list...','info');
+  await apiFetch('/admin/refresh-at-risk');
+  load();
+}
+
+function render(list){
+  if(!list.length){
+    document.getElementById('main-content').innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">✅</div><h3>All clear!</h3><p style="font-size:12px;color:var(--text3)">No students below threshold. Great attendance!</p></div></div>`;
+    return;
+  }
+  document.getElementById('main-content').innerHTML=`
+    <div class="alert alert-danger" style="margin-bottom:14px">⚠️ <strong>${list.length} student${list.length>1?'s':''}</strong> below the 75% attendance threshold. Consider notifying them.</div>
+    <div class="card">
+      <div class="section-title">⚠️ At-Risk Students (${list.length})</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Student</th><th>Reg Number</th><th>Attendance</th><th>Submissions</th><th>Reason</th></tr></thead>
+        <tbody>
+          ${list.map(s=>`<tr>
+            <td style="font-weight:600;color:var(--text)">${s.name}</td>
+            <td style="font-size:11px;color:var(--text2)">${s.reg_number}</td>
+            <td>
+              <span style="font-family:var(--font-display);font-weight:700;color:var(--red)">${s.att_pct??'—'}%</span>
+              <div class="progress-bar" style="margin-top:4px;width:80px">
+                <div class="progress-fill" style="width:${s.att_pct??0}%;background:var(--red)"></div>
+              </div>
+            </td>
+            <td style="color:var(--text2)">${s.submitted_count??0} submissions</td>
+            <td><span class="risk-tag">${s.reason||'Low attendance'}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Audit Log — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Audit Log</div><div class="topbar-sub">All system actions — logins, grades, submissions</div></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('admin','Audit Log');
+
+async function load(){
+  try{const d=await apiFetch('/admin/audit-log?limit=100');render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+const actionIcon={LOGIN:'🔑',LOGOUT:'👋',GRADE:'⭐',SUBMIT:'📤',CREATE_ASSIGNMENT:'📝',LOGIN_FAIL:'⚠️'};
+const actionColor={LOGIN:'var(--accent)',GRADE:'var(--green)',SUBMIT:'var(--purple)',CREATE_ASSIGNMENT:'var(--orange)',LOGIN_FAIL:'var(--red)'};
+
+function render(list){
+  document.getElementById('main-content').innerHTML=`
+    <div class="card">
+      <div class="section-title">📋 Recent Activity (${list.length} entries)</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Time</th><th>User</th><th>Role</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody>
+          ${list.map(l=>`<tr>
+            <td style="font-size:11px;color:var(--text3);white-space:nowrap">${formatDateTime(l.created_at)}</td>
+            <td style="font-weight:600;color:var(--text);font-size:13px">${l.user_name}</td>
+            <td><span class="badge badge-gray">${l.user_role}</span></td>
+            <td><span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:${actionColor[l.action]||'var(--text2)'}">${actionIcon[l.action]||'•'} ${l.action}</span></td>
+            <td style="font-size:12px;color:var(--text2);max-width:240px">${l.details||'—'}</td>
+            <td style="font-size:11px;color:var(--text3)">${l.ip_address||'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

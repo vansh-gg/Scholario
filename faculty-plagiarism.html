@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Plagiarism — Scholario</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+  <div id="sidebar"></div>
+  <div class="main">
+    <div class="topbar">
+      <div><div class="topbar-title">Plagiarism Flags</div><div class="topbar-sub">Flagged submissions with side-by-side comparison</div></div>
+    </div>
+    <div class="page-content fade-in" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading...</div>
+    </div>
+  </div>
+</div>
+<script src="shared.js"></script>
+<script>
+const user=getUser();
+buildSidebar('faculty','Plagiarism');
+
+async function load(){
+  try{const d=await apiFetch(`/faculty/${user.user_id}/plagiarism`);render(d);}
+  catch(e){document.getElementById('main-content').innerHTML=`<div class="alert alert-danger">${e.message}</div>`;}
+}
+
+function highlight(text){
+  if(!text) return '(No content)';
+  return text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function render(list){
+  if(!list.length){
+    document.getElementById('main-content').innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">🔍</div><h3>No flags</h3><p style="font-size:12px;color:var(--text3)">No plagiarism detected in your assignments.</p></div></div>`;
+    return;
+  }
+  document.getElementById('main-content').innerHTML=`
+    <div class="alert alert-warning" style="margin-bottom:14px">🔍 <strong>${list.length} submission${list.length>1?'s':''}</strong> flagged for text similarity. Review and take action if needed.</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      ${list.map(s=>`
+        <div class="card" style="border-left:3px solid var(--red)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-family:var(--font-display);font-size:15px;font-weight:800;margin-bottom:4px">${s.assignment_title}</div>
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                <span style="font-weight:600;color:var(--text)">${s.student_name}</span>
+                <span style="font-size:11px;color:var(--text3)">${s.reg_number}</span>
+                ${plagBadge(true)}
+                ${s.is_late?lateBadge(true):''}
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">Submitted ${timeAgo(s.submitted_at)}</div>
+            </div>
+            <div style="font-size:11px;color:var(--red);background:var(--red-bg);border:1px solid #fecaca;border-radius:6px;padding:7px 12px;font-weight:600;flex-shrink:0">
+              ⚠ ${s.plagiarism_note||'Similarity detected'}
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+                🔴 Flagged — ${s.student_name}
+              </div>
+              <div style="background:var(--red-bg);border:1px solid #fecaca;border-radius:7px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.7;min-height:80px;max-height:160px;overflow-y:auto;white-space:pre-wrap">${highlight(s.submission_text)}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+                🟡 Similar Submission${s.similar_submissions.length>1?'s':''}
+              </div>
+              ${s.similar_submissions.length===0
+                ?`<div style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:12px;color:var(--text3)">No other submissions found for comparison.</div>`
+                :s.similar_submissions.slice(0,2).map(o=>`
+                  <div style="background:var(--yellow-bg);border:1px solid #fde68a;border-radius:7px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.7;min-height:80px;max-height:160px;overflow-y:auto;white-space:pre-wrap;margin-bottom:6px">
+                    <div style="font-size:10px;font-weight:700;color:var(--yellow);margin-bottom:4px">${o.student_name} (${o.reg_number})</div>
+                    ${highlight(o.submission_text)}
+                  </div>
+                `).join('')
+              }
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <a href="faculty-submissions.html" class="btn btn-secondary btn-sm">📋 View in Submissions</a>
+            <span style="font-size:11px;color:var(--text3);align-self:center">Take action by grading with a remark or contacting the student directly.</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>
